@@ -1,36 +1,36 @@
 package com.example.apiapp
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.apiapp.data.network.NetworkModule
-import com.example.apiapp.data.repository.TodoRepository
-import com.example.apiapp.ui.TodoScreen
-import com.example.apiapp.ui.TodoViewModel
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.apiapp.ui.CharacterScreen
+import com.example.apiapp.ui.CharacterViewModel
 import com.example.apiapp.ui.theme.ApiAppTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private val requestNotificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
-        val repository = TodoRepository(NetworkModule.apiService)
-        
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
         setContent {
             ApiAppTheme {
-                val viewModel: TodoViewModel = viewModel(
-                    factory = object : ViewModelProvider.Factory {
-                        @Suppress("UNCHECKED_CAST")
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return TodoViewModel(repository) as T
-                        }
-                    }
-                )
-                TodoScreen(viewModel = viewModel)
+                val viewModel: CharacterViewModel = hiltViewModel()
+                CharacterScreen(viewModel = viewModel)
             }
         }
     }
