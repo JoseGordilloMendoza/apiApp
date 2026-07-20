@@ -1,9 +1,10 @@
 package com.example.apiapp.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,8 +15,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -25,10 +28,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -36,11 +41,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.apiapp.data.model.Character
+import com.example.apiapp.ui.theme.StatusAlive
+import com.example.apiapp.ui.theme.StatusDead
+import com.example.apiapp.ui.theme.StatusUnknown
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CharacterScreen(viewModel: CharacterViewModel) {
+fun CharacterScreen(
+    viewModel: CharacterViewModel,
+    onCharacterClick: (Int) -> Unit,
+    onCompareRequested: (Int, Int) -> Unit
+) {
     val uiState by viewModel.uiState.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
     val allCharacters by viewModel.allCharacters.collectAsState()
@@ -49,35 +62,101 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
     val statusFilter by viewModel.statusFilter.collectAsState()
     val favoritesOnly by viewModel.favoritesOnly.collectAsState()
 
-    var selectedCharacterId by remember { mutableStateOf<Int?>(null) }
-    val detailCharacter = selectedCharacterId?.let { id -> allCharacters.find { it.id == id } }
-
-    BackHandler(enabled = selectedCharacterId != null) { selectedCharacterId = null }
-
-    if (detailCharacter != null) {
-        CharacterDetailScreen(
-            character = detailCharacter,
-            onBack = { selectedCharacterId = null },
-            onToggleFavorite = { viewModel.toggleFavorite(it) }
-        )
-        return
-    }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var compareMode by remember { mutableStateOf(false) }
+    var compareSelection by remember { mutableStateOf(emptyList<Int>()) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text("Personajes", fontWeight = FontWeight.Bold) },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    actions = {
-                        IconButton(onClick = { viewModel.loadInitial() }) {
-                            Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reiniciar lista")
-                        }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            if (compareMode) {
+                CompareModeBar(
+                    selectedCount = compareSelection.size,
+                    onCompare = {
+                        onCompareRequested(compareSelection[0], compareSelection[1])
+                        compareMode = false
+                        compareSelection = emptyList()
+                    },
+                    onCancel = {
+                        compareMode = false
+                        compareSelection = emptyList()
                     }
                 )
+            }
+        },
+        topBar = {
+            Column {
+                Box(
+                    modifier = Modifier.background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.tertiaryContainer
+                            )
+                        )
+                    )
+                ) {
+                    TopAppBar(
+                        title = {
+                            Column {
+                                Text(
+                                    text = "PORTAL DEX",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    text = "Personajes",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        actions = {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "Más opciones",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Actualizar ahora") },
+                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        viewModel.loadInitial()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Sincronizar en segundo plano") },
+                                    leadingIcon = { Icon(Icons.Default.Send, contentDescription = null) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        viewModel.syncInBackground()
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Sincronización en segundo plano programada")
+                                        }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (compareMode) "Cancelar comparación" else "Comparar personajes") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        compareMode = !compareMode
+                                        compareSelection = emptyList()
+                                    }
+                                )
+                            }
+                        }
+                    )
+                }
 
                 SyncStatusBar(
                     isConnected = isConnected,
@@ -103,8 +182,7 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
                             Text(
                                 text = "Sin conexión: mostrando datos guardados localmente",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                fontWeight = FontWeight.Bold
+                                color = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
                     }
@@ -135,11 +213,43 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
                         hasMore = state.hasMore,
                         isLoadingMore = state.isLoadingMore,
                         onLoadMore = { viewModel.loadMoreCharacters() },
-                        onSelectCharacter = { selectedCharacterId = it.id },
-                        onToggleFavorite = { viewModel.toggleFavorite(it) }
+                        onSelectCharacter = { onCharacterClick(it.id) },
+                        onToggleFavorite = { viewModel.toggleFavorite(it) },
+                        compareMode = compareMode,
+                        compareSelection = compareSelection,
+                        onToggleCompareSelection = { id ->
+                            compareSelection = when {
+                                compareSelection.contains(id) -> compareSelection - id
+                                compareSelection.size < 2 -> compareSelection + id
+                                else -> {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Ya seleccionaste 2 personajes, quita uno primero")
+                                    }
+                                    compareSelection
+                                }
+                            }
+                        }
                     )
                     is UiState.Error -> ErrorScreen(message = state.message) { viewModel.loadInitial() }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun CompareModeBar(selectedCount: Int, onCompare: () -> Unit, onCancel: () -> Unit) {
+    Surface(shadowElevation = 8.dp, color = MaterialTheme.colorScheme.surface) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Selecciona 2 personajes ($selectedCount/2)", style = MaterialTheme.typography.bodyMedium)
+            Row {
+                TextButton(onClick = onCancel) { Text("Cancelar") }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = onCompare, enabled = selectedCount == 2) { Text("Comparar") }
             }
         }
     }
@@ -167,7 +277,7 @@ fun SyncStatusBar(isConnected: Boolean, lastSyncedAt: Long?, cachedCount: Int) {
                 modifier = Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(if (isConnected) Color(0xFF4CAF50) else Color(0xFFE53935))
+                    .background(if (isConnected) StatusAlive else StatusDead)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
@@ -177,8 +287,9 @@ fun SyncStatusBar(isConnected: Boolean, lastSyncedAt: Long?, cachedCount: Int) {
             )
         }
         Text(
-            text = "Sync: ${formatRelativeSync(lastSyncedAt, now)}",
+            text = "SYNC ${formatRelativeSync(lastSyncedAt, now)}",
             style = MaterialTheme.typography.labelSmall,
+            fontFamily = com.example.apiapp.ui.theme.ReadoutFontFamily,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
@@ -216,7 +327,7 @@ fun SearchAndFilterBar(
             placeholder = { Text("Buscar personaje...") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
-            shape = RoundedCornerShape(12.dp)
+            shape = MaterialTheme.shapes.medium
         )
         Spacer(modifier = Modifier.height(8.dp))
         Row(
@@ -249,7 +360,15 @@ fun SearchAndFilterBar(
 @Composable
 fun LoadingScreen() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Abriendo un portal...",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -261,9 +380,8 @@ fun ErrorScreen(message: String, onRetry: () -> Unit) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "¡Ups! Algo salió mal.",
+            text = "¡Ups! Se cerró el portal.",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.error
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -274,7 +392,7 @@ fun ErrorScreen(message: String, onRetry: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onRetry, shape = RoundedCornerShape(12.dp)) {
+        Button(onClick = onRetry, shape = MaterialTheme.shapes.medium) {
             Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reintentar")
             Spacer(modifier = Modifier.width(8.dp))
             Text("Reintentar")
@@ -289,12 +407,15 @@ fun CharacterList(
     isLoadingMore: Boolean,
     onLoadMore: () -> Unit,
     onSelectCharacter: (Character) -> Unit,
-    onToggleFavorite: (Int) -> Unit
+    onToggleFavorite: (Int) -> Unit,
+    compareMode: Boolean = false,
+    compareSelection: List<Int> = emptyList(),
+    onToggleCompareSelection: (Int) -> Unit = {}
 ) {
     if (characters.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
-                text = "No hay personajes que coincidan con la búsqueda.",
+                text = "Ni en esta dimensión hay resultados.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -311,8 +432,12 @@ fun CharacterList(
         items(characters, key = { it.id }) { character ->
             CharacterCard(
                 character = character,
-                onClick = { onSelectCharacter(character) },
-                onToggleFavorite = { onToggleFavorite(character.id) }
+                onClick = {
+                    if (compareMode) onToggleCompareSelection(character.id) else onSelectCharacter(character)
+                },
+                onToggleFavorite = { onToggleFavorite(character.id) },
+                compareMode = compareMode,
+                isSelectedForCompare = character.id in compareSelection
             )
         }
 
@@ -336,13 +461,22 @@ fun CharacterList(
 }
 
 @Composable
-fun CharacterCard(character: Character, onClick: () -> Unit, onToggleFavorite: () -> Unit) {
+fun CharacterCard(
+    character: Character,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    compareMode: Boolean = false,
+    isSelectedForCompare: Boolean = false
+) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelectedForCompare) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surface
+        )
     ) {
         Row(
             modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -352,7 +486,10 @@ fun CharacterCard(character: Character, onClick: () -> Unit, onToggleFavorite: (
                 model = character.imageUrl,
                 contentDescription = character.name,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp))
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .border(2.dp, statusColor(character.status), MaterialTheme.shapes.medium)
             )
 
             Spacer(modifier = Modifier.width(16.dp))
@@ -361,7 +498,6 @@ fun CharacterCard(character: Character, onClick: () -> Unit, onToggleFavorite: (
                 Text(
                     text = character.name,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -371,35 +507,47 @@ fun CharacterCard(character: Character, onClick: () -> Unit, onToggleFavorite: (
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(statusColor(character.status))
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = character.status,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                StatusBadge(status = character.status)
             }
 
-            IconButton(onClick = onToggleFavorite) {
-                Icon(
-                    imageVector = if (character.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (character.isFavorite) "Quitar de favoritos" else "Agregar a favoritos",
-                    tint = if (character.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (compareMode) {
+                Checkbox(checked = isSelectedForCompare, onCheckedChange = { onClick() })
+            } else {
+                IconButton(onClick = onToggleFavorite) {
+                    Icon(
+                        imageVector = if (character.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (character.isFavorite) "Quitar de favoritos" else "Agregar a favoritos",
+                        tint = if (character.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
 }
 
+@Composable
+fun StatusBadge(status: String, modifier: Modifier = Modifier) {
+    val color = statusColor(status)
+    Row(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(color.copy(alpha = 0.14f))
+            .border(BorderStroke(1.dp, color.copy(alpha = 0.4f)), CircleShape)
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(color))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = status.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = color
+        )
+    }
+}
+
 fun statusColor(status: String): Color = when (status.lowercase()) {
-    "alive" -> Color(0xFF4CAF50)
-    "dead" -> Color(0xFFE53935)
-    else -> Color(0xFF9E9E9E)
+    "alive" -> StatusAlive
+    "dead" -> StatusDead
+    else -> StatusUnknown
 }

@@ -1,13 +1,19 @@
 package com.example.apiapp.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.apiapp.data.connectivity.ConnectivityObserver
+import com.example.apiapp.data.model.Character
+import com.example.apiapp.data.network.toUserMessage
 import com.example.apiapp.data.repository.CharacterRepository
+import com.example.apiapp.data.sync.SyncScheduler
 import com.example.apiapp.notifications.NotificationHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -25,7 +31,8 @@ private data class Filters(
 class CharacterViewModel @Inject constructor(
     private val repository: CharacterRepository,
     connectivityObserver: ConnectivityObserver,
-    private val notificationHelper: NotificationHelper
+    private val notificationHelper: NotificationHelper,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _isLoading = MutableStateFlow(true)
@@ -44,6 +51,12 @@ class CharacterViewModel @Inject constructor(
 
     val lastSyncedAt: StateFlow<Long?> = repository.lastSyncedAt
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val totalCount: StateFlow<Int?> = repository.totalCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val _episodeState = MutableStateFlow<EpisodeUiState>(EpisodeUiState.Idle)
+    val episodeState: StateFlow<EpisodeUiState> = _episodeState.asStateFlow()
 
     val searchQuery = MutableStateFlow("")
     val statusFilter = MutableStateFlow(StatusFilter.ALL)
@@ -90,7 +103,7 @@ class CharacterViewModel @Inject constructor(
                 .onSuccess { hasMore -> _hasMore.value = hasMore }
                 .onFailure { error ->
                     if (!repository.hasCachedData()) {
-                        _errorMessage.value = error.localizedMessage ?: "Sin conexión y sin datos guardados"
+                        _errorMessage.value = error.toUserMessage()
                     }
                 }
             _isLoading.value = false
@@ -124,6 +137,24 @@ class CharacterViewModel @Inject constructor(
 
     fun toggleFavoritesOnly() {
         favoritesOnly.value = !favoritesOnly.value
+    }
+
+    fun loadEpisodes(character: Character) {
+        if (character.episodeIds.isEmpty()) {
+            _episodeState.value = EpisodeUiState.Unavailable
+            return
+        }
+        viewModelScope.launch {
+            _episodeState.value = EpisodeUiState.Loading
+            repository.getEpisodes(character.episodeIds)
+                .onSuccess { episodes -> _episodeState.value = EpisodeUiState.Success(episodes) }
+                .onFailure { error -> _episodeState.value = EpisodeUiState.Error(error.toUserMessage()) }
+        }
+    }
+
+    /** Encola una sincronizacion en segundo plano via WorkManager (OneTimeWorkRequest). */
+    fun syncInBackground() {
+        SyncScheduler.enqueueOneTimeSync(context)
     }
 
     private fun observeConnectivity() {

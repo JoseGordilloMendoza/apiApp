@@ -6,5 +6,6 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "sync_meta")
 data class SyncMetaEntity(
     @PrimaryKey val id: Int = 0,
-    val lastSyncedAt: Long
+    val lastSyncedAt: Long,
+    val totalCount: Int = 0
 )

@@ -5,10 +5,13 @@ data class Character(
     val name: String,
     val status: String,
     val species: String,
+    val type: String,
     val gender: String,
     val imageUrl: String,
     val locationName: String,
     val originName: String,
     val episodeCount: Int,
-    val isFavorite: Boolean
+    val isFavorite: Boolean,
+    val firstEpisodeId: Int?,
+    val episodeIds: List<Int>
 )

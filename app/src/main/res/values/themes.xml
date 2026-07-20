@@ -2,4 +2,10 @@
 <resources>
 
     <style name="Theme.ApiApp" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.ApiApp.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/portal_space</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.ApiApp</item>
+    </style>
 </resources>

@@ -15,3 +15,17 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         db.execSQL("CREATE TABLE IF NOT EXISTS sync_meta (id INTEGER NOT NULL PRIMARY KEY, lastSyncedAt INTEGER NOT NULL)")
     }
 }
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE characters ADD COLUMN firstEpisodeId INTEGER")
+    }
+}
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE characters ADD COLUMN type TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE characters ADD COLUMN episodeIds TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE sync_meta ADD COLUMN totalCount INTEGER NOT NULL DEFAULT 0")
+    }
+}

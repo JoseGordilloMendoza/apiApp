@@ -1,6 +1,7 @@
 package com.example.apiapp.di
 
 import com.example.apiapp.data.network.RickAndMortyApiService
+import com.google.gson.Gson
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -16,9 +17,13 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(): Retrofit = Retrofit.Builder()
+    fun provideGson(): Gson = Gson()
+
+    @Provides
+    @Singleton
+    fun provideRetrofit(gson: Gson): Retrofit = Retrofit.Builder()
         .baseUrl(BASE_URL)
-        .addConverterFactory(GsonConverterFactory.create())
+        .addConverterFactory(GsonConverterFactory.create(gson))
         .build()
 
     @Provides

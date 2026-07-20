@@ -7,9 +7,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.apiapp.ui.CharacterScreen
+import com.example.apiapp.shortcuts.AppShortcuts
 import com.example.apiapp.ui.CharacterViewModel
+import com.example.apiapp.ui.navigation.AppNavHost
 import com.example.apiapp.ui.theme.ApiAppTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -20,6 +22,7 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -27,10 +30,12 @@ class MainActivity : ComponentActivity() {
             requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
+        val shortcutDestination = intent?.getStringExtra(AppShortcuts.EXTRA_DESTINATION)
+
         setContent {
             ApiAppTheme {
                 val viewModel: CharacterViewModel = hiltViewModel()
-                CharacterScreen(viewModel = viewModel)
+                AppNavHost(viewModel = viewModel, initialDestination = shortcutDestination)
             }
         }
     }

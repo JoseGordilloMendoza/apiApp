@@ -9,6 +9,7 @@ data class CharacterEntity(
     val name: String,
     val status: String,
     val species: String,
+    val type: String,
     val gender: String,
     val imageUrl: String,
     val locationName: String,
@@ -16,5 +17,7 @@ data class CharacterEntity(
     val episodeCount: Int,
     val page: Int,
     val sortOrder: Int,
-    val isFavorite: Boolean
+    val isFavorite: Boolean,
+    val firstEpisodeId: Int?,
+    val episodeIds: String
 )

@@ -12,4 +12,7 @@ interface SyncMetaDao {
 
     @Query("SELECT lastSyncedAt FROM sync_meta WHERE id = 0")
     fun observeLastSyncedAt(): Flow<Long?>
+
+    @Query("SELECT totalCount FROM sync_meta WHERE id = 0")
+    fun observeTotalCount(): Flow<Int?>
 }
